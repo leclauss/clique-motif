@@ -1,3 +1,6 @@
 [submodule "algorithms/graph/scamp"]
 	path = algorithms/graph/scamp
 	url = https://github.com/leclauss/SCAMP.git
+[submodule "tsgenerator"]
+	path = tsgenerator
+	url = https://github.com/leclauss/tsgenerator.git
