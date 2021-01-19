@@ -1,0 +1,3 @@
+[submodule "algorithms/graph/scamp"]
+	path = algorithms/graph/scamp
+	url = https://github.com/leclauss/SCAMP.git
