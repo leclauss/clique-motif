@@ -37,10 +37,10 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     graphPath = "distanceGraph.mtx"
     log("creating graph... ", end="", flush=True)
     startTime = time.time()
-    edgeCount = createGraphSCAMP(tsPath, windowSize, radius, graphPath)
+    nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, radius, graphPath)
     graphTime = time.time() - startTime
     log("done (" + str(graphTime) + " s)")
-    log("edges:", edgeCount, "(file size:", os.stat(graphPath).st_size, "B)")
+    log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", os.stat(graphPath).st_size, "B)")
 
     # find maximum clique
 
@@ -64,7 +64,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     cliqueTime = time.time() - startTime
     log("done (" + str(cliqueTime) + " s)")
 
-    return motifIndices, (graphTime, cliqueTime)
+    return motifIndices, (nodeCount, edgeCount, graphTime, cliqueTime)
 
 
 def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1):
@@ -93,7 +93,7 @@ def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1):
           + " " + str(edgeCount) + mtx
     with open(graphPath, "w") as graphFile:
         graphFile.write(mtx)
-    return edgeCount
+    return nodes, edgeCount
 
 
 if __name__ == "__main__":
