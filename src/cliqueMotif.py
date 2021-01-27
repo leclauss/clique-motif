@@ -37,7 +37,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     graphPath = "distanceGraph.mtx"
     log("creating graph... ", end="", flush=True)
     startTime = time.time()
-    nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, radius, graphPath)
+    nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath)
     graphTime = time.time() - startTime
     log("done (" + str(graphTime) + " s)")
     log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", os.stat(graphPath).st_size, "B)")
