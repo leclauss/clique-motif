@@ -15,7 +15,6 @@ defaultLength = 4000
 defaultWindow = 30
 defaultSize = 9
 defaultNoise = 2.0
-defaultRangeFactor = 1.0
 defaultMethod = "boundedNormalRandomWalk"
 defaultType = "box"
 
@@ -23,7 +22,6 @@ lengths = [2000, 4000, 8000, 16000, 32000, 64000]
 windows = []  # [30, 35, 40, 45]
 sizes = []  # [3, 5, 7, 9]
 noises = []  # [2.0, 2.25, 2.5, 2.75]
-rangeFactors = []  # [1.0, 1.5, 2.0, 2.5]
 methods = []  # ["boundedNormalRandomWalk", "linearRandomWalk", "piecewiseLinearRandom", "splineRepeated"]
 motifTypes = []  # ["box", "semicircle", "positiveflank", "sine"]
 
@@ -35,7 +33,7 @@ defaultMaximum = 20.0
 
 
 def main(args):
-    if Path.is_dir(benchmarkPath):
+    if benchmarkPath.is_dir():
         if "-c" in args or "--clean" in args:
             print("Cleaning Benchmark Directories")
             shutil.rmtree(benchmarkPath)
@@ -44,7 +42,7 @@ def main(args):
             return 1
 
     print("Building Benchmark")
-    Path.mkdir(benchmarkPath)
+    benchmarkPath.mkdir(parents=True)
     generateBenchmark()
     return 0
 
@@ -68,17 +66,14 @@ def generateBenchmark():
     for window in windows:
         createTimeSeries("variableWindow", window=window)
 
-    for rangeFactor in rangeFactors:
-        createTimeSeries("variableRangeFactor", factor=rangeFactor)
-
 
 def createTimeSeries(folderName, rep=repeat, gen=generator, length=defaultLength, window=defaultWindow,
-                     size=defaultSize, noise=defaultNoise, factor=defaultRangeFactor, method=defaultMethod,
+                     size=defaultSize, noise=defaultNoise, method=defaultMethod,
                      motifType=defaultType):
     outDir = folderName + "/method_" + method + "_type_" + motifType + "_noise_" + str(noise) \
-             + "_length_" + str(length) + "_size_" + str(size) + "_window_" + str(window) + "_factor_" + str(factor)
+             + "_length_" + str(length) + "_size_" + str(size) + "_window_" + str(window)
     outPath = benchmarkPath / outDir
-    Path.mkdir(outPath, parents=True)
+    outPath.mkdir(parents=True)
 
     delta = defaultDelta
     step = defaultStep
