@@ -77,8 +77,8 @@ def main(args):
 
 def runBenchmark(benchmarkDir):
     with open(benchmarkDir / "stats.csv", "w") as statsFile, open(benchmarkDir / "info.csv", "w") as infoFile:
-        statsFile.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Range,Algorithm,"
-                        "Runtime,Precision,Recall,F1,Found Size\n")
+        statsFile.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Actual Range,Input Range,"
+                        "Algorithm,Runtime,Precision,Recall,F1,Found Size\n")
 
         # walk benchmark directory recursively
         for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkDir):
@@ -91,12 +91,13 @@ def runBenchmark(benchmarkDir):
             length = int(info["length"])
             window = int(info["window"])
             motifRange = float(info["range"])
+            inputRange = motifRange * radiusMultiplier
             motif = [int(index) for index in info["matchings"].split(",")]
 
             for name, algorithm in algorithms.items():
                 # start algorithm
                 startTime = time.time()
-                output = algorithm(tsPath, length, window, motifRange * radiusMultiplier)
+                output = algorithm(tsPath, length, window, inputRange)
                 runtime = time.time() - startTime
 
                 # save output and runtime
@@ -108,12 +109,12 @@ def runBenchmark(benchmarkDir):
                 # parse output, calculate measures and save stats
                 motifsFound, infoLines = parseOutput(output)
                 f1Score, precision, recall, foundSize = getPointBasedScores(motif, motifsFound, window)
-                runInfo = info["length"] + "," + info["method"] + "," + info["type"] + "," + info["noise"] + "," + \
-                          info["size"] + "," + info["window"] + "," + info["range"] + "," + name + ","
-                statsFile.write(runInfo + str(runtime) + "," + str(precision) + "," + str(recall) + "," + str(f1Score)
-                                + "," + str(foundSize) + "\n")
+                runInfo = ",".join([info["length"], info["method"], info["type"], info["noise"], info["size"],
+                                    info["window"], info["range"], str(inputRange), name]) + ","
+                statsFile.write(runInfo + ",".join([str(runtime), str(precision), str(recall), str(f1Score),
+                                                    str(foundSize)]) + "\n")
                 if len(infoLines) > 0:
-                    infoFile.write(runInfo + ','.join(infoLines) + "\n")
+                    infoFile.write(runInfo + ",".join(infoLines) + "\n")
 
 
 def getBenchmarkFiles(benchmarkDir):
