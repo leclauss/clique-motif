@@ -12,7 +12,7 @@ path = Path(__file__).parent.absolute()
 # settings
 benchmarkPath = path / "benchmark"
 algDir = path / "../tsgenerator/benchmark/algorithms"
-
+radiusMultiplier = 1.0
 algorithms = {
     "EMMA": lambda tsPath, _, window, radius: emma(tsPath, window, radius),
     "GrammarViz3.0": lambda tsPath, _, window, __: grammarViz(tsPath, window),
@@ -96,7 +96,7 @@ def runBenchmark(benchmarkDir):
             for name, algorithm in algorithms.items():
                 # start algorithm
                 startTime = time.time()
-                output = algorithm(tsPath, length, window, motifRange)
+                output = algorithm(tsPath, length, window, motifRange * radiusMultiplier)
                 runtime = time.time() - startTime
 
                 # save output and runtime
