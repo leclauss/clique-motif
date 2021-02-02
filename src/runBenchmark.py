@@ -26,7 +26,7 @@ algorithms = {
 
 def emma(tsPath, window, radius):
     return getOutput(["java", "-jar", algDir / "EMMA.jar", tsPath,
-                      str(window), str(2*radius), "6", "4", "1.0"])
+                      str(window), str(2 * radius), "6", "4", "1.0"])
 
 
 def grammarViz(tsPath, window):
@@ -76,9 +76,9 @@ def main(args):
 
 
 def runBenchmark(benchmarkDir):
-    with open(benchmarkDir / "stats.csv", "w") as stats:
-        stats.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Range,Algorithm,"
-                    "Runtime,Precision,Recall,F1,Found Size\n")
+    with open(benchmarkDir / "stats.csv", "w") as statsFile, open(benchmarkDir / "info.csv", "w") as infoFile:
+        statsFile.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Range,Algorithm,"
+                        "Runtime,Precision,Recall,F1,Found Size\n")
 
         # walk benchmark directory recursively
         for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkDir):
@@ -106,12 +106,14 @@ def runBenchmark(benchmarkDir):
                     runtimeFile.write(str(runtime))
 
                 # parse output, calculate measures and save stats
-                motifsFound = getMotifs(output)
+                motifsFound, infoLines = parseOutput(output)
                 f1Score, precision, recall, foundSize = getPointBasedScores(motif, motifsFound, window)
-                stats.write(
-                    info["length"] + "," + info["method"] + "," + info["type"] + "," + info["noise"] + "," +
-                    info["size"] + "," + info["window"] + "," + info["range"] + "," + name + "," + str(runtime) + "," +
-                    str(precision) + "," + str(recall) + "," + str(f1Score) + "," + str(foundSize) + "\n")
+                runInfo = info["length"] + "," + info["method"] + "," + info["type"] + "," + info["noise"] + "," + \
+                          info["size"] + "," + info["window"] + "," + info["range"] + "," + name + ","
+                statsFile.write(runInfo + str(runtime) + "," + str(precision) + "," + str(recall) + "," + str(f1Score)
+                                + "," + str(foundSize) + "\n")
+                if len(infoLines) > 0:
+                    infoFile.write(runInfo + ','.join(infoLines) + "\n")
 
 
 def getBenchmarkFiles(benchmarkDir):
@@ -136,23 +138,28 @@ def getMetaInformation(tsMetaPath):
     return info
 
 
-def getMotifs(output):
+def parseOutput(output):
     motifs = []
     currentMotif = []
+    infoLines = []
+    endFound = False
     for line in output.splitlines():
-        isNext = line.startswith("next")
-        isEnd = line.startswith("end")
-        if isNext or isEnd:
-            if len(currentMotif) > 0:
-                motifs.append(currentMotif)
-                currentMotif = []
-            if isEnd:
-                return motifs
+        if endFound:
+            infoLines.append(line.strip())
         else:
-            currentMotif.append(int(line))
+            isNext = line.startswith("next")
+            isEnd = line.startswith("end")
+            if isNext or isEnd:
+                if len(currentMotif) > 0:
+                    motifs.append(currentMotif)
+                    currentMotif = []
+                if isEnd:
+                    endFound = True
+            else:
+                currentMotif.append(int(line))
     if len(currentMotif) > 0:
         motifs.append(currentMotif)
-    return motifs
+    return motifs, infoLines
 
 
 def getPointBasedScores(motif, motifsFound, window):
@@ -171,7 +178,7 @@ def getPointBasedScores(motif, motifsFound, window):
         precision = (truePositives / returnedPositives if returnedPositives > 0 else 0.0)
         # calculate recall
         actualPositives = truePositives + falseNegatives
-        recall = (truePositives/actualPositives if actualPositives > 0 else 0.0)
+        recall = (truePositives / actualPositives if actualPositives > 0 else 0.0)
         # calculate f1 score
         f1Score = (2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0)
         # save best f1 score
