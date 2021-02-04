@@ -5,7 +5,7 @@ import sys
 import time
 from pathlib import Path
 
-from src.cliqueMotif import getTopMotif
+from cliqueMotif import getTopMotif
 
 path = Path(__file__).parent.absolute()
 
@@ -46,7 +46,7 @@ def setFinder(tsPath, window, radius):
 
 def learnMotifs(tsPath, length, window, radius):
     return getOutput(["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath),
-                      "ETA=0.1", "maxItr=1000", "numRandomRestarts=200", "alpha=2", "K=1", "pct=1",
+                      "eta=0.1", "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=1", "pct=1",
                       "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius)])
 
 
@@ -76,9 +76,9 @@ def main(args):
 
 
 def runBenchmark(benchmarkDir):
-    with open(benchmarkDir / "stats.csv", "w") as statsFile, open(benchmarkDir / "info.csv", "w") as infoFile:
+    with open(benchmarkDir / "stats.csv", "w") as statsFile:
         statsFile.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Actual Range,Input Range,"
-                        "Algorithm,Runtime,Precision,Recall,F1,Found Size\n")
+                        "Algorithm,Runtime,Precision,Recall,F1,Found Size,Other Output\n")
 
         # walk benchmark directory recursively
         for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkDir):
@@ -108,13 +108,11 @@ def runBenchmark(benchmarkDir):
 
                 # parse output, calculate measures and save stats
                 motifsFound, infoLines = parseOutput(output)
-                f1Score, precision, recall, foundSize = getPointBasedScores(motif, motifsFound, window)
+                f1Score, precision, recall, foundSize, _ = getPointBasedScores(motif, motifsFound, window)
                 runInfo = ",".join([info["length"], info["method"], info["type"], info["noise"], info["size"],
                                     info["window"], info["range"], str(inputRange), name]) + ","
                 statsFile.write(runInfo + ",".join([str(runtime), str(precision), str(recall), str(f1Score),
-                                                    str(foundSize)]) + "\n")
-                if len(infoLines) > 0:
-                    infoFile.write(runInfo + ",".join(infoLines) + "\n")
+                                                    str(foundSize)] + infoLines) + "\n")
 
 
 def getBenchmarkFiles(benchmarkDir):
@@ -167,9 +165,9 @@ def getPointBasedScores(motif, motifsFound, window):
     # get relevant motif points
     motifPoints = getMotifPoints(motif, window)
 
-    bestStats = (0.0, 0.0, 0.0, 0)  # f1Score, precision, recall, foundSize
+    bestStats = (0.0, 0.0, 0.0, 0, -1)  # f1Score, precision, recall, foundSize, index
     # calculate measures for each motif found
-    for motifFound in motifsFound:
+    for index, motifFound in enumerate(motifsFound):
         foundPoints = getMotifPoints(motifFound, window)
         truePositives = len(motifPoints.intersection(foundPoints))
         falsePositives = len(foundPoints.difference(motifPoints))
@@ -184,7 +182,7 @@ def getPointBasedScores(motif, motifsFound, window):
         f1Score = (2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0)
         # save best f1 score
         if f1Score > bestStats[0]:
-            bestStats = (f1Score, precision, recall, len(motifFound))
+            bestStats = (f1Score, precision, recall, len(motifFound), index)
     return bestStats
 
 
