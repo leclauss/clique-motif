@@ -9,7 +9,7 @@ path = Path(__file__).parent.absolute()
 tsgeneratorPath = path / "../tsgenerator/tsgenerator/build/tsgenerator"
 benchmarkPath = path / "benchmark"
 
-repeat = 250
+repeat = 1
 generator = "latent motif"
 defaultLength = 4000
 defaultWindow = 30
@@ -18,12 +18,13 @@ defaultNoise = 2.0
 defaultMethod = "boundedNormalRandomWalk"
 defaultType = "box"
 
-lengths = [2000, 4000, 8000, 16000, 32000, 64000]
-windows = []  # [30, 35, 40, 45]
+lengths = [2000, 4000, 8000, 16000, 32000, 64000]  # [4000, 5000, 6000, 7000]
 sizes = []  # [3, 5, 7, 9]
-noises = []  # [2.0, 2.25, 2.5, 2.75]
-methods = []  # ["boundedNormalRandomWalk", "linearRandomWalk", "piecewiseLinearRandom", "splineRepeated"]
-motifTypes = []  # ["box", "semicircle", "positiveflank", "sine"]
+sizesPercent = [0.0016, 0.0024, 0.0032, 0.004]  # size proportional to length
+windows = [20, 30, 40, 50]  # [30, 35, 40, 45]
+noises = [1.5, 2.0, 2.5, 3.0]  # [2.0, 2.25, 2.5, 2.75]
+methods = ["boundedNormalRandomWalk", "linearRandomWalk", "piecewiseLinearRandom", "splineRepeated"]
+motifTypes = ["box", "semicircle", "positiveflank", "sine"]
 
 defaultDelta = 1.0
 defaultStep = 1.0
@@ -40,37 +41,53 @@ def main(args):
         else:
             print("Error: benchmark directory already exists.\nRun with --clean to remove it.")
             return 1
+    exhaustive = True if ("-e" in args or "--exhaustive" in args) else False
 
     print("Building Benchmark")
     benchmarkPath.mkdir(parents=True)
-    generateBenchmark()
+    generateBenchmark(exhaustive)
     return 0
 
 
-def generateBenchmark():
-    for method in methods:
-        createTimeSeries("variableMethod", method=method)
+def generateBenchmark(exhaustive):
+    if exhaustive:
+        for length in lengths:
+            for size in getAllSizes(length):
+                for window in windows:
+                    for noise in noises:
+                        for method in methods:
+                            for motifType in motifTypes:
+                                createTimeSeries(length=length, window=window, size=size,
+                                                 noise=noise, method=method, motifType=motifType)
+    else:
+        for length in lengths:
+            createTimeSeries("variableLength", length=length)
 
-    for motifType in motifTypes:
-        createTimeSeries("variableType", motifType=motifType)
+        for size in getAllSizes(defaultLength):
+            createTimeSeries("variableSize", size=size)
 
-    for noise in noises:
-        createTimeSeries("variableNoise", noise=noise)
+        for window in windows:
+            createTimeSeries("variableWindow", window=window)
 
-    for length in lengths:
-        createTimeSeries("variableLength", length=length)
+        for noise in noises:
+            createTimeSeries("variableNoise", noise=noise)
 
-    for size in sizes:
-        createTimeSeries("variableSize", size=size)
+        for method in methods:
+            createTimeSeries("variableMethod", method=method)
 
-    for window in windows:
-        createTimeSeries("variableWindow", window=window)
+        for motifType in motifTypes:
+            createTimeSeries("variableType", motifType=motifType)
 
 
-def createTimeSeries(folderName, rep=repeat, gen=generator, length=defaultLength, window=defaultWindow,
-                     size=defaultSize, noise=defaultNoise, method=defaultMethod,
-                     motifType=defaultType):
-    outDir = folderName + "/method_" + method + "_type_" + motifType + "_noise_" + str(noise) \
+def getAllSizes(length):
+    return sorted(set([round(sizePercent * length) for sizePercent in sizesPercent] + sizes))
+
+
+def createTimeSeries(folderName="", rep=repeat, gen=generator, length=defaultLength, window=defaultWindow,
+                     size=defaultSize, noise=defaultNoise, method=defaultMethod, motifType=defaultType):
+    if folderName != "":
+        folderName += "/"
+    outDir = folderName + "method_" + method + "_type_" + motifType + "_noise_" + str(noise) \
              + "_length_" + str(length) + "_size_" + str(size) + "_window_" + str(window)
     outPath = benchmarkPath / outDir
     outPath.mkdir(parents=True)
