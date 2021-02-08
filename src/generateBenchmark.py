@@ -1,5 +1,6 @@
 import subprocess
 import sys
+from multiprocessing import Pool
 from pathlib import Path
 import shutil
 
@@ -8,6 +9,7 @@ path = Path(__file__).parent.absolute()
 # settings
 tsgeneratorPath = path / "../tsgenerator/tsgenerator/build/tsgenerator"
 benchmarkPath = path / "benchmark"
+threads = 8
 
 repeat = 1
 generator = "latent motif"
@@ -50,6 +52,8 @@ def main(args):
 
 
 def generateBenchmark(exhaustive):
+    poolArgs = []
+
     if exhaustive:
         for length in lengths:
             for size in getAllSizes(length):
@@ -57,26 +61,34 @@ def generateBenchmark(exhaustive):
                     for noise in noises:
                         for method in methods:
                             for motifType in motifTypes:
-                                createTimeSeries(length=length, window=window, size=size,
-                                                 noise=noise, method=method, motifType=motifType)
+                                poolArgs.append(("", repeat, generator, length, window, size, noise, method, motifType))
     else:
         for length in lengths:
-            createTimeSeries("variableLength", length=length)
+            poolArgs.append(("variableLength", repeat, generator, length, defaultWindow, defaultSize,
+                             defaultNoise, defaultMethod, defaultType))
 
         for size in getAllSizes(defaultLength):
-            createTimeSeries("variableSize", size=size)
+            poolArgs.append(("variableSize", repeat, generator, defaultLength, defaultWindow, size,
+                             defaultNoise, defaultMethod, defaultType))
 
         for window in windows:
-            createTimeSeries("variableWindow", window=window)
+            poolArgs.append(("variableWindow", repeat, generator, defaultLength, window, defaultSize,
+                             defaultNoise, defaultMethod, defaultType))
 
         for noise in noises:
-            createTimeSeries("variableNoise", noise=noise)
+            poolArgs.append(("variableNoise", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                             noise, defaultMethod, defaultType))
 
         for method in methods:
-            createTimeSeries("variableMethod", method=method)
+            poolArgs.append(("variableMethod", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                             defaultNoise, method, defaultType))
 
         for motifType in motifTypes:
-            createTimeSeries("variableType", motifType=motifType)
+            poolArgs.append(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                             defaultNoise, defaultMethod, motifType))
+
+    with Pool(threads) as threadPool:
+        threadPool.starmap(createTimeSeries, poolArgs)
 
 
 def getAllSizes(length):
