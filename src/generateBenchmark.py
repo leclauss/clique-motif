@@ -1,6 +1,6 @@
 import subprocess
 import sys
-from multiprocessing import Pool
+from multiprocessing import Queue, Process
 from pathlib import Path
 import shutil
 
@@ -22,7 +22,7 @@ defaultType = "box"
 
 lengths = [2000, 4000, 8000, 16000, 32000, 64000]  # [4000, 5000, 6000, 7000]
 sizes = []  # [3, 5, 7, 9]
-sizesPercent = [0.0016, 0.0024, 0.0032, 0.004]  # size proportional to length
+sizesPercent = [0.0015, 0.0020, 0.0025, 0.0030]  # size proportional to length
 windows = [20, 30, 40, 50]  # [30, 35, 40, 45]
 noises = [1.5, 2.0, 2.5, 3.0]  # [2.0, 2.25, 2.5, 2.75]
 methods = ["boundedNormalRandomWalk", "linearRandomWalk", "piecewiseLinearRandom", "splineRepeated"]
@@ -52,7 +52,7 @@ def main(args):
 
 
 def generateBenchmark(exhaustive):
-    poolArgs = []
+    poolArgs = Queue()
 
     if exhaustive:
         for length in lengths:
@@ -61,34 +61,46 @@ def generateBenchmark(exhaustive):
                     for noise in noises:
                         for method in methods:
                             for motifType in motifTypes:
-                                poolArgs.append(("", repeat, generator, length, window, size, noise, method, motifType))
+                                poolArgs.put(("", repeat, generator, length, window, size, noise, method, motifType))
     else:
         for length in lengths:
-            poolArgs.append(("variableLength", repeat, generator, length, defaultWindow, defaultSize,
-                             defaultNoise, defaultMethod, defaultType))
+            poolArgs.put(("variableLength", repeat, generator, length, defaultWindow, defaultSize,
+                          defaultNoise, defaultMethod, defaultType))
 
         for size in getAllSizes(defaultLength):
-            poolArgs.append(("variableSize", repeat, generator, defaultLength, defaultWindow, size,
-                             defaultNoise, defaultMethod, defaultType))
+            poolArgs.put(("variableSize", repeat, generator, defaultLength, defaultWindow, size,
+                          defaultNoise, defaultMethod, defaultType))
 
         for window in windows:
-            poolArgs.append(("variableWindow", repeat, generator, defaultLength, window, defaultSize,
-                             defaultNoise, defaultMethod, defaultType))
+            poolArgs.put(("variableWindow", repeat, generator, defaultLength, window, defaultSize,
+                          defaultNoise, defaultMethod, defaultType))
 
         for noise in noises:
-            poolArgs.append(("variableNoise", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                             noise, defaultMethod, defaultType))
+            poolArgs.put(("variableNoise", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                          noise, defaultMethod, defaultType))
 
         for method in methods:
-            poolArgs.append(("variableMethod", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                             defaultNoise, method, defaultType))
+            poolArgs.put(("variableMethod", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                          defaultNoise, method, defaultType))
 
         for motifType in motifTypes:
-            poolArgs.append(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                             defaultNoise, defaultMethod, motifType))
+            poolArgs.put(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                          defaultNoise, defaultMethod, motifType))
 
-    with Pool(threads) as threadPool:
-        threadPool.starmap(createTimeSeries, poolArgs)
+    workers = [Process(target=work, args=(poolArgs,)) for _ in range(threads)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+
+
+def work(queue):
+    while True:
+        try:
+            args = queue.get_nowait()
+        except Exception:
+            break
+        createTimeSeries(*args)
 
 
 def getAllSizes(length):
