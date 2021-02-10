@@ -64,7 +64,7 @@ def learnMotifs(tsPath, length, window, radius, timeout):
 
 def run(args, timeout=None):
     try:
-        output = subprocess.run(args, capture_output=True, text=True, timeout=timeout).stdout
+        output = subprocess.run(args, stdout=subprocess.PIPE, timeout=timeout).stdout.decode("utf-8")
     except subprocess.TimeoutExpired:
         return None
     return output

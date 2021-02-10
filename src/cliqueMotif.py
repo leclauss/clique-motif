@@ -53,15 +53,15 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
     startTime = time.time()
 
     try:
-        pr = subprocess.run(["../algorithms/clique/lmc/LMC", graphPath], capture_output=True, text=True,
-                            timeout=(timeout - graphTime) if timeout is not None else None)
+        output = subprocess.run(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE,
+                                timeout=(timeout - graphTime) if timeout is not None else None).stdout.decode("utf-8")
     except subprocess.TimeoutExpired:
         log("failed (timeout)")
         return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
     finally:
         os.remove("distanceGraph.mtx")
     motifIndices = []
-    for line in pr.stdout.splitlines():
+    for line in output.splitlines():
         if line.startswith("M "):
             indices = line.split(" ")
             for index in indices:
@@ -86,15 +86,15 @@ def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1, timeo
     correlation_threshold = (1 - radius ** 2 / 2 / windowSize)
     # TODO replace subprocess call with pyscamp api (threshold parameter currently does not work):
     # pyscamp.selfjoin_knn(ts, windowSize, threshold=correlation_threshold)
-    proc = subprocess.run(
+    output = subprocess.run(
         ["../algorithms/graph/scamp/build/SCAMP", "--window=" + str(windowSize), "--input_a_file_name=" + tsPath,
          "--no_gpu", "--num_cpu_workers=" + str(cpu_workers), "--threshold=" + str(correlation_threshold),
-         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], capture_output=True, text=True,
-        timeout=timeout)
+         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], stdout=subprocess.PIPE,
+        timeout=timeout).stdout.decode("utf-8")
 
     mtx = ""
     edgeCount = 0
-    for line in proc.stdout.splitlines():
+    for line in output.splitlines():
         nums = line.split(" ")
         a = int(nums[0])
         b = int(nums[1])
