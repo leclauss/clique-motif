@@ -3,116 +3,143 @@ import re
 import subprocess
 import sys
 import time
+import argparse
+from multiprocessing import Queue
 from pathlib import Path
 
 from cliqueMotif import getTopMotif
+from util import parallelRun
 
 path = Path(__file__).parent.absolute()
 
-# settings
-benchmarkPath = path / "benchmark"
+# algorithm settings
 algDir = path / "../tsgenerator/benchmark/algorithms"
-radiusMultiplier = 1.0
 algorithms = {
-    "EMMA": lambda tsPath, _, window, radius: emma(tsPath, window, radius),
-    "GrammarViz3.0": lambda tsPath, _, window, __: grammarViz(tsPath, window),
-    "ScanMK": lambda tsPath, _, window, radius: scanMk(tsPath, window, radius),
-    "SetFinder": lambda tsPath, _, window, radius: setFinder(tsPath, window, radius),
-    "LearnMotifs": lambda tsPath, length, window, radius: learnMotifs(tsPath, length, window, radius),
-    "ClusterMK": lambda tsPath, _, window, radius: clusterMk(tsPath, window, radius),
-    "CliqueMotif": lambda tsPath, _, window, radius: cliqueMotif(tsPath, window, radius)
+    "CliqueMotif": lambda tsPath, _, window, radius, timeout: cliqueMotif(tsPath, window, radius, timeout),
+    "EMMA": lambda tsPath, _, window, radius, timeout: emma(tsPath, window, radius, timeout),
+    "GrammarViz3.0": lambda tsPath, _, window, __, timeout: grammarViz(tsPath, window, timeout),
+    "ScanMK": lambda tsPath, _, window, radius, timeout: scanMk(tsPath, window, radius, timeout),
+    "SetFinder": lambda tsPath, _, window, radius, timeout: setFinder(tsPath, window, radius, timeout),
+    "ClusterMK": lambda tsPath, _, window, radius, timeout: clusterMk(tsPath, window, radius, timeout),
+    "LearnMotifs": lambda tsPath, length, window, radius, timeout: learnMotifs(tsPath, length, window, radius, timeout)
 }
 
 
-def emma(tsPath, window, radius):
-    return getOutput(["java", "-jar", algDir / "EMMA.jar", tsPath,
-                      str(window), str(2 * radius), "6", "4", "1.0"])
+def cliqueMotif(tsPath, window, radius, timeout):
+    motif, stats = getTopMotif(window, radius, str(tsPath), timeout=timeout)
+    return [motif] if motif is not None else None, stats
 
 
-def grammarViz(tsPath, window):
-    return getOutput(["java", "-jar", algDir / "GrammarViz3.jar", "-d", tsPath,
-                      "-w", str(window), "-p", "6", "-a", "4"])
+def emma(tsPath, window, radius, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "EMMA.jar", tsPath,
+                            str(window), str(2 * radius), "6", "4", "1.0"], timeout=timeout)), None
 
 
-def scanMk(tsPath, window, radius):
-    return getOutput(["java", "-jar", algDir / "ScanMK.jar", "d=" + str(tsPath),
-                      "w=" + str(window), "k=1", "r=" + str(radius)])
+def grammarViz(tsPath, window, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "GrammarViz3.jar", "-d", tsPath,
+                            "-w", str(window), "-p", "6", "-a", "4"], timeout=timeout)), None
 
 
-def setFinder(tsPath, window, radius):
-    return getOutput(["java", "-jar", algDir / "SetFinder.jar", "d=" + str(tsPath),
-                      "w=" + str(window), "k=1", "r=" + str(radius)])
+def scanMk(tsPath, window, radius, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "ScanMK.jar", "d=" + str(tsPath),
+                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
 
 
-def learnMotifs(tsPath, length, window, radius):
-    return getOutput(["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath),
-                      "eta=0.1", "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=1", "pct=1",
-                      "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius)])
+def setFinder(tsPath, window, radius, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "SetFinder.jar", "d=" + str(tsPath),
+                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
 
 
-def clusterMk(tsPath, window, radius):
-    return getOutput(["java", "-jar", algDir / "ClusterMK.jar", "d=" + str(tsPath),
-                      "w=" + str(window), "k=1", "r=" + str(radius)])
+def clusterMk(tsPath, window, radius, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "ClusterMK.jar", "d=" + str(tsPath),
+                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
 
 
-def cliqueMotif(tsPath, window, radius):
-    motif, stats = getTopMotif(window, radius, str(tsPath))
-    output = ""
-    for index in motif:
-        output += str(index) + "\n"
-    output += "end\n"
-    for stat in stats:
-        output += str(stat) + "\n"
+def learnMotifs(tsPath, length, window, radius, timeout):
+    return parseOutput(run(["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath),
+                            "eta=0.1", "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=3", "pct=1",
+                            "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius ** 2)],
+                           timeout=timeout)), None
+
+
+def run(args, timeout=None):
+    try:
+        output = subprocess.run(args, capture_output=True, text=True, timeout=timeout).stdout
+    except subprocess.TimeoutExpired:
+        return None
     return output
 
 
-def getOutput(args):
-    return subprocess.run(args, capture_output=True, text=True).stdout
+def parseOutput(output):
+    if output is None:
+        return None
+    motifs = []
+    currentMotif = []
+    for line in output.splitlines():
+        isNext = line.startswith("next")
+        isEnd = line.startswith("end")
+        if isNext or isEnd:
+            if len(currentMotif) > 0:
+                motifs.append(currentMotif)
+                currentMotif = []
+            if isEnd:
+                return motifs
+        else:
+            currentMotif.append(int(line))
+    if len(currentMotif) > 0:
+        motifs.append(currentMotif)
+    return motifs
 
 
-def main(args):
-    runBenchmark(benchmarkPath)
+def main():
+    parser = argparse.ArgumentParser(description="Run the latent motif discovery benchmark.")
+    parser.add_argument("benchmarkPath", type=Path, help="relative path to the benchmark")
+    parser.add_argument("outputFile", type=Path, help="relative path to the output file")
+    parser.add_argument("--sep", default=";", help="separator in the output csv file (default: ';')")
+    parser.add_argument("--algs", default=",".join(algorithms.keys()),
+                        help="names of the algorithms to be tested, separated by ',' (default: "
+                             "all available algorithms: " + ", ".join(algorithms.keys()) + ")")
+    parser.add_argument("--radius", type=float, default=1.0, help="input radius multiplier (default: 1.0)")
+    parser.add_argument("--threads", type=int, default=1, help="number of threads (default: 1)")
+    parser.add_argument("--timeout", type=float, default=None, help="maximum time for a single time series in seconds"
+                                                                    " (default: None)")
+    args = parser.parse_args()
+    runBenchmark(args.benchmarkPath.absolute(), args.outputFile.absolute(), args.sep, args.algs.split(","), args.radius,
+                 args.threads, args.timeout)
     return 0
 
 
-def runBenchmark(benchmarkDir):
-    with open(benchmarkDir / "stats.csv", "w") as statsFile:
-        statsFile.write("Time Series Length,Method,Motif Shape,Noise,Motif Size,Window,Actual Range,Input Range,"
-                        "Algorithm,Runtime,Precision,Recall,F1,Found Size,Other Output\n")
+def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMultiplier, threads, timeout):
+    threadArgs = Queue()
+    # walk benchmark directory recursively
+    for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkPath):
+        tsDir = Path(directory)
+        tsPath = tsDir / tsName
+        tsMetaPath = tsDir / tsMetaName
 
-        # walk benchmark directory recursively
-        for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkDir):
-            tsDir = Path(directory)
-            tsPath = tsDir / tsName
-            tsMetaPath = tsDir / tsMetaName
+        # get meta information
+        info = getMetaInformation(tsMetaPath)
+        length = int(info["length"])
+        window = int(info["window"])
+        motifRange = float(info["range"])
+        inputRange = motifRange * radiusMultiplier
 
-            # get meta information
-            info = getMetaInformation(tsMetaPath)
-            length = int(info["length"])
-            window = int(info["window"])
-            motifRange = float(info["range"])
-            inputRange = motifRange * radiusMultiplier
-            motif = [int(index) for index in info["matchings"].split(",")]
+        for name in algorithmNames:
+            threadArgs.put((name, tsPath, tsMetaPath, length, window, inputRange, timeout))
 
-            for name, algorithm in algorithms.items():
-                # start algorithm
-                startTime = time.time()
-                output = algorithm(tsPath, length, window, inputRange)
-                runtime = time.time() - startTime
+    # run benchmark parallelized
+    resultQueue = parallelRun(__runAlgorithm, threadArgs, threads)
 
-                # save output and runtime
-                with open(tsDir / ("output_" + name + ".txt"), "w") as outFile:
-                    outFile.write(output)
-                with open(tsDir / ("runtime_" + name + ".txt"), "w") as runtimeFile:
-                    runtimeFile.write(str(runtime))
-
-                # parse output, calculate measures and save stats
-                motifsFound, infoLines = parseOutput(output)
-                f1Score, precision, recall, foundSize, _ = getPointBasedScores(motif, motifsFound, window)
-                runInfo = ",".join([info["length"], info["method"], info["type"], info["noise"], info["size"],
-                                    info["window"], info["range"], str(inputRange), name]) + ","
-                statsFile.write(runInfo + ",".join([str(runtime), str(precision), str(recall), str(f1Score),
-                                                    str(foundSize)] + infoLines) + "\n")
+    # write results to output file
+    with open(outFilePath, "w") as outputFile:
+        outputFile.write(separator.join(["TS Path", "Meta Path", "Input Range", "Algorithm", "Runtime", "Found Motifs",
+                                         "Stats"]) + "\n")
+        while True:
+            try:
+                result = resultQueue.get_nowait()
+                outputFile.write(separator.join(result) + "\n")
+            except Exception:
+                break
 
 
 def getBenchmarkFiles(benchmarkDir):
@@ -137,61 +164,17 @@ def getMetaInformation(tsMetaPath):
     return info
 
 
-def parseOutput(output):
-    motifs = []
-    currentMotif = []
-    infoLines = []
-    endFound = False
-    for line in output.splitlines():
-        if endFound:
-            infoLines.append(line.strip())
-        else:
-            isNext = line.startswith("next")
-            isEnd = line.startswith("end")
-            if isNext or isEnd:
-                if len(currentMotif) > 0:
-                    motifs.append(currentMotif)
-                    currentMotif = []
-                if isEnd:
-                    endFound = True
-            else:
-                currentMotif.append(int(line))
-    if len(currentMotif) > 0:
-        motifs.append(currentMotif)
-    return motifs, infoLines
+def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRange, timeout):
+    algorithm = algorithms[name]
 
+    # run algorithm
+    startTime = time.time()
+    motifsFound, stats = algorithm(tsPath, length, window, inputRange, timeout)
+    runtime = time.time() - startTime
 
-def getPointBasedScores(motif, motifsFound, window):
-    # get relevant motif points
-    motifPoints = getMotifPoints(motif, window)
-
-    bestStats = (0.0, 0.0, 0.0, 0, -1)  # f1Score, precision, recall, foundSize, index
-    # calculate measures for each motif found
-    for index, motifFound in enumerate(motifsFound):
-        foundPoints = getMotifPoints(motifFound, window)
-        truePositives = len(motifPoints.intersection(foundPoints))
-        falsePositives = len(foundPoints.difference(motifPoints))
-        falseNegatives = len(motifPoints.difference(foundPoints))
-        # calculate precision
-        returnedPositives = truePositives + falsePositives
-        precision = (truePositives / returnedPositives if returnedPositives > 0 else 0.0)
-        # calculate recall
-        actualPositives = truePositives + falseNegatives
-        recall = (truePositives / actualPositives if actualPositives > 0 else 0.0)
-        # calculate f1 score
-        f1Score = (2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0)
-        # save best f1 score
-        if f1Score > bestStats[0]:
-            bestStats = (f1Score, precision, recall, len(motifFound), index)
-    return bestStats
-
-
-def getMotifPoints(motif, window):
-    motifPoints = set()
-    for index in motif:
-        motifPoints = motifPoints.union(set(range(index, index + window)))
-    return motifPoints
+    # return results
+    return [str(tsPath), str(tsMetaPath), str(inputRange), name, str(runtime), str(motifsFound), str(stats)]
 
 
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    sys.exit(main())

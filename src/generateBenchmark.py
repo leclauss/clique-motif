@@ -1,8 +1,10 @@
 import subprocess
 import sys
-from multiprocessing import Queue, Process
+from multiprocessing import Queue
 from pathlib import Path
 import shutil
+
+from util import parallelRun
 
 path = Path(__file__).parent.absolute()
 
@@ -87,20 +89,7 @@ def generateBenchmark(exhaustive):
             poolArgs.put(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
                           defaultNoise, defaultMethod, motifType))
 
-    workers = [Process(target=work, args=(poolArgs,)) for _ in range(threads)]
-    for worker in workers:
-        worker.start()
-    for worker in workers:
-        worker.join()
-
-
-def work(queue):
-    while True:
-        try:
-            args = queue.get_nowait()
-        except Exception:
-            break
-        createTimeSeries(*args)
+    parallelRun(createTimeSeries, poolArgs, threads)
 
 
 def getAllSizes(length):

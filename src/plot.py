@@ -2,10 +2,11 @@ import time
 import matplotlib.pyplot as plt
 
 from cliqueMotif import loadTS
-from runBenchmark import getMetaInformation, getMotifPoints, getPointBasedScores, parseOutput, algorithms
+from runBenchmark import getMetaInformation, parseOutput, algorithms
+from getStats import getMotifPoints, getPointBasedScores
 
 
-def plotMotif(algorithm, tsPath, tsMetaPath):
+def plotMotif(algorithm, tsPath, tsMetaPath, timeout=None):
     ts = loadTS(tsPath)
     info = getMetaInformation(tsMetaPath)
     length = int(info["length"])
@@ -14,10 +15,9 @@ def plotMotif(algorithm, tsPath, tsMetaPath):
     motif = [int(index) for index in info["matchings"].split(",")]
 
     startTime = time.time()
-    output = algorithms[algorithm](tsPath, length, window, radius)
+    motifsFound, stats = algorithms[algorithm](tsPath, length, window, radius, timeout)
     runtime = time.time() - startTime
 
-    motifsFound, _ = parseOutput(output)
     f1Score, precision, recall, _, index = getPointBasedScores(motif, motifsFound, window)
     bestMotifFound = motifsFound[index] if index != -1 else []
     print("Runtime:", "{:.3f}".format(runtime), "s", "\nF1-Score:", "{:.4f}".format(f1Score), "\nPrecision:",
