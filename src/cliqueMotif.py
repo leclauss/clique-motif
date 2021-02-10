@@ -12,6 +12,7 @@ def main():
     radius = float(sys.argv[2])
     tsPath = sys.argv[3]
     log = print if "-v" in sys.argv else doNothing
+    # TODO add timeout parameter, catch motifIndices=None below
 
     motifIndices = getTopMotif(windowSize, radius, tsPath, log)[0]
 
@@ -31,13 +32,17 @@ def loadTS(tsPath):
     return ts
 
 
-def getTopMotif(windowSize, radius, tsPath, log=doNothing):
+def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
     # create distance graph
 
     graphPath = "distanceGraph.mtx"
     log("creating graph... ", end="", flush=True)
     startTime = time.time()
-    nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath)
+    try:
+        nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        log("failed (timeout)")
+        return None, (0, 0, max(0.0, timeout), 0.0)
     graphTime = time.time() - startTime
     log("done (" + str(graphTime) + " s)")
     log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", os.stat(graphPath).st_size, "B)")
@@ -47,8 +52,14 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     log("running LMC... ", end="", flush=True)
     startTime = time.time()
 
-    pr = subprocess.run(["../algorithms/clique/lmc/LMC", graphPath], capture_output=True, text=True)
-    os.remove("distanceGraph.mtx")
+    try:
+        pr = subprocess.run(["../algorithms/clique/lmc/LMC", graphPath], capture_output=True, text=True,
+                            timeout=(timeout - graphTime) if timeout is not None else None)
+    except subprocess.TimeoutExpired:
+        log("failed (timeout)")
+        return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
+    finally:
+        os.remove("distanceGraph.mtx")
     motifIndices = []
     for line in pr.stdout.splitlines():
         if line.startswith("M "):
@@ -67,7 +78,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     return motifIndices, (nodeCount, edgeCount, graphTime, cliqueTime)
 
 
-def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1):
+def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1, timeout=None):
     # TODO multiple threads don't work (scamp output is not correct)
     ts = loadTS(tsPath)
     length = len(ts)
@@ -78,7 +89,8 @@ def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1):
     proc = subprocess.run(
         ["../algorithms/graph/scamp/build/SCAMP", "--window=" + str(windowSize), "--input_a_file_name=" + tsPath,
          "--no_gpu", "--num_cpu_workers=" + str(cpu_workers), "--threshold=" + str(correlation_threshold),
-         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], capture_output=True, text=True)
+         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], capture_output=True, text=True,
+        timeout=timeout)
 
     mtx = ""
     edgeCount = 0
