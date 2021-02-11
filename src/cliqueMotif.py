@@ -34,33 +34,37 @@ def loadTS(tsPath):
 
 
 def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
-    # create distance graph
-
+    # create named pipe
     graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
-    log("creating graph... ", end="", flush=True)
-    startTime = time.time()
-    try:
-        nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        log("failed (timeout)")
-        return None, (0, 0, max(0.0, timeout), 0.0)
-    graphTime = time.time() - startTime
-    log("done (" + str(graphTime) + " s)")
-    log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", os.stat(graphPath).st_size, "B)")
-
-    # find maximum clique
-
-    log("running LMC... ", end="", flush=True)
-    startTime = time.time()
+    os.mkfifo(graphPath)
 
     try:
-        output = subprocess.run(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE,
-                                timeout=(timeout - graphTime) if timeout is not None else None).stdout.decode("utf-8")
-    except subprocess.TimeoutExpired:
-        log("failed (timeout)")
-        return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
+        # start maximum clique algorithm (pipe has to be opened for reading first)
+        maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
+
+        # create distance graph
+        log("creating graph... ", end="", flush=True)
+        startTime = time.time()
+        try:
+            nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath, timeout=timeout)
+        except subprocess.TimeoutExpired:
+            log("failed (timeout)")
+            return None, (0, 0, max(0.0, timeout), 0.0)
+        graphTime = time.time() - startTime
+        log("done (" + str(graphTime) + " s)")
+        log("nodes:", nodeCount, ", edges:", edgeCount)
+
+        # find maximum clique
+        log("running LMC... ", end="", flush=True)
+        startTime = time.time()
+        try:
+            stdout, _ = maxCliqueProcess.communicate(timeout=(timeout - graphTime) if timeout is not None else None)
+        except subprocess.TimeoutExpired:
+            log("failed (timeout)")
+            return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
     finally:
         os.remove(graphPath)
+    output = stdout.decode("utf-8")
     motifIndices = []
     for line in output.splitlines():
         if line.startswith("M "):
