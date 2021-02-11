@@ -310,6 +310,7 @@ static int read_graph_node_node(char *input_file, int format) {
 	NB_NODE = NB_NODE + offset;
 
 	printf("R the graph size is %d\n", NB_NODE);
+    fflush(stdout);
 	if (NB_NODE > MAX_NODE) {
 		printf("R the graph goes beyond the max size can be processed: %d\n",
 				NB_NODE);
@@ -321,7 +322,11 @@ static int read_graph_node_node(char *input_file, int format) {
 	memset(Node_Degree, 0, (NB_NODE + 1) * sizeof(int));
 
 	nb_edge = 0;
-	fseek(fp_in, 0L, SEEK_SET);
+	fp_in = fopen(input_file, "r");
+	if (fp_in == NULL ) {
+		printf("R can not open file (again) %s\n", input_file);
+		return FALSE;
+	}
 	while (fgets(line, 127, fp_in) != NULL ) {
 		if ((format == 1 && line[0] == 'e')
 				|| (format == 2 && line[0] != '%')) {

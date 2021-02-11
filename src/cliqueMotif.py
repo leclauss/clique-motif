@@ -34,36 +34,44 @@ def loadTS(tsPath):
 
 
 def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
-    # create named pipe
     graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
-    os.mkfifo(graphPath)
 
+    # create distance graph
+    log("creating graph... ", end="", flush=True)
+    graphStartTime = time.time()
     try:
-        # start maximum clique algorithm (pipe has to be opened for reading first)
+        mtx, nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        log("failed (timeout)")
+        return None, (0, 0, max(0.0, timeout), 0.0)
+    graphTime = time.time() - graphStartTime
+    log("done (" + str(graphTime) + " s)")
+    log("nodes:", nodeCount, ", edges:", edgeCount)
+
+    # find maximum clique
+    log("running LMC... ", end="", flush=True)
+    cliqueStartTime = time.time()
+    os.mkfifo(graphPath)  # create named pipe
+    try:
+        # start LMC
         maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
-
-        # create distance graph
-        log("creating graph... ", end="", flush=True)
-        startTime = time.time()
+        # write MTX twice (LMC needs to read twice)
+        with open(graphPath, "w") as graphFile:
+            graphFile.write(mtx)
+        for line in maxCliqueProcess.stdout:
+            if line.startswith(b"R the graph size is"):  # wait for first read to finish
+                break
+        with open(graphPath, "w") as graphFile:
+            graphFile.write(mtx)
         try:
-            nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, graphPath, timeout=timeout)
-        except subprocess.TimeoutExpired:
-            log("failed (timeout)")
-            return None, (0, 0, max(0.0, timeout), 0.0)
-        graphTime = time.time() - startTime
-        log("done (" + str(graphTime) + " s)")
-        log("nodes:", nodeCount, ", edges:", edgeCount)
-
-        # find maximum clique
-        log("running LMC... ", end="", flush=True)
-        startTime = time.time()
-        try:
-            stdout, _ = maxCliqueProcess.communicate(timeout=(timeout - graphTime) if timeout is not None else None)
+            # wait for LMC
+            stdout, _ = maxCliqueProcess.communicate(
+                timeout=(timeout - (time.time() - graphStartTime)) if timeout is not None else None)
         except subprocess.TimeoutExpired:
             log("failed (timeout)")
             return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
     finally:
-        os.remove(graphPath)
+        os.remove(graphPath)  # remove pipe
     output = stdout.decode("utf-8")
     motifIndices = []
     for line in output.splitlines():
@@ -77,13 +85,13 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
                     pass
             break
 
-    cliqueTime = time.time() - startTime
+    cliqueTime = time.time() - cliqueStartTime
     log("done (" + str(cliqueTime) + " s)")
 
     return motifIndices, (nodeCount, edgeCount, graphTime, cliqueTime)
 
 
-def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1, timeout=None):
+def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1, timeout=None):
     # TODO multiple threads don't work (scamp output is not correct)
     ts = loadTS(tsPath)
     length = len(ts)
@@ -108,9 +116,7 @@ def createGraphSCAMP(tsPath, windowSize, radius, graphPath, cpu_workers=1, timeo
             mtx += "\n" + str(a + 1) + " " + str(b + 1)
     mtx = "%%MatrixMarket matrix coordinate pattern symmetric\n%\n" + str(nodes) + " " + str(nodes) \
           + " " + str(edgeCount) + mtx
-    with open(graphPath, "w") as graphFile:
-        graphFile.write(mtx)
-    return nodes, edgeCount
+    return mtx, nodes, edgeCount
 
 
 if __name__ == "__main__":
