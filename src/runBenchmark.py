@@ -4,11 +4,10 @@ import subprocess
 import sys
 import time
 import argparse
-from multiprocessing import Queue
 from pathlib import Path
 
 from cliqueMotif import getTopMotif
-from util import parallelRun
+from util import ParallelRun
 
 path = Path(__file__).parent.absolute()
 
@@ -104,13 +103,25 @@ def main():
     parser.add_argument("--timeout", type=float, default=None, help="maximum time for a single time series in seconds"
                                                                     " (default: None)")
     args = parser.parse_args()
-    runBenchmark(args.benchmarkPath.absolute(), args.outputFile.absolute(), args.sep, args.algs.split(","), args.radius,
-                 args.threads, args.timeout)
-    return 0
+    return runBenchmark(args.benchmarkPath.absolute(), args.outputFile.absolute(), args.sep, args.algs.split(","),
+                        args.radius, args.threads, args.timeout)
 
 
 def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMultiplier, threads, timeout):
-    threadArgs = Queue()
+    if outFilePath.exists():
+        print("Error: output file", outFilePath, "already exists")
+        return 1
+
+    def output(*results):
+        with open(outFilePath, "a") as outFile:
+            outFile.write(separator.join(results) + "\n")
+
+    # write header
+    output(*["TS Path", "Meta Path", "Input Range", "Algorithm", "Runtime", "Found Motifs", "Stats"])
+
+    # run benchmark parallelized
+    pool = ParallelRun(__runAlgorithm, threads, log=print, outputFunction=output)
+
     # walk benchmark directory recursively
     for directory, tsName, tsMetaName in getBenchmarkFiles(benchmarkPath):
         tsDir = Path(directory)
@@ -125,21 +136,10 @@ def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMu
         inputRange = motifRange * radiusMultiplier
 
         for name in algorithmNames:
-            threadArgs.put((name, tsPath, tsMetaPath, length, window, inputRange, timeout))
+            pool.run((name, tsPath, tsMetaPath, length, window, inputRange, timeout))
 
-    # run benchmark parallelized
-    resultQueue = parallelRun(__runAlgorithm, threadArgs, threads)
-
-    # write results to output file
-    with open(outFilePath, "w") as outputFile:
-        outputFile.write(separator.join(["TS Path", "Meta Path", "Input Range", "Algorithm", "Runtime", "Found Motifs",
-                                         "Stats"]) + "\n")
-        while True:
-            try:
-                result = resultQueue.get_nowait()
-                outputFile.write(separator.join(result) + "\n")
-            except Exception:
-                break
+    pool.join()
+    return 0
 
 
 def getBenchmarkFiles(benchmarkDir):

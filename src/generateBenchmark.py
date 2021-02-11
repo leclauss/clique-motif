@@ -1,10 +1,9 @@
 import subprocess
 import sys
-from multiprocessing import Queue
 from pathlib import Path
 import shutil
 
-from util import parallelRun
+from util import ParallelRun
 
 path = Path(__file__).parent.absolute()
 
@@ -54,7 +53,7 @@ def main(args):
 
 
 def generateBenchmark(exhaustive):
-    poolArgs = Queue()
+    pool = ParallelRun(createTimeSeries, threads)
 
     if exhaustive:
         for length in lengths:
@@ -63,33 +62,33 @@ def generateBenchmark(exhaustive):
                     for noise in noises:
                         for method in methods:
                             for motifType in motifTypes:
-                                poolArgs.put(("", repeat, generator, length, window, size, noise, method, motifType))
+                                pool.run(("", repeat, generator, length, window, size, noise, method, motifType))
     else:
         for length in lengths:
-            poolArgs.put(("variableLength", repeat, generator, length, defaultWindow, defaultSize,
-                          defaultNoise, defaultMethod, defaultType))
+            pool.run(("variableLength", repeat, generator, length, defaultWindow, defaultSize,
+                      defaultNoise, defaultMethod, defaultType))
 
         for size in getAllSizes(defaultLength):
-            poolArgs.put(("variableSize", repeat, generator, defaultLength, defaultWindow, size,
-                          defaultNoise, defaultMethod, defaultType))
+            pool.run(("variableSize", repeat, generator, defaultLength, defaultWindow, size,
+                      defaultNoise, defaultMethod, defaultType))
 
         for window in windows:
-            poolArgs.put(("variableWindow", repeat, generator, defaultLength, window, defaultSize,
-                          defaultNoise, defaultMethod, defaultType))
+            pool.run(("variableWindow", repeat, generator, defaultLength, window, defaultSize,
+                      defaultNoise, defaultMethod, defaultType))
 
         for noise in noises:
-            poolArgs.put(("variableNoise", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                          noise, defaultMethod, defaultType))
+            pool.run(("variableNoise", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                      noise, defaultMethod, defaultType))
 
         for method in methods:
-            poolArgs.put(("variableMethod", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                          defaultNoise, method, defaultType))
+            pool.run(("variableMethod", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                      defaultNoise, method, defaultType))
 
         for motifType in motifTypes:
-            poolArgs.put(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
-                          defaultNoise, defaultMethod, motifType))
+            pool.run(("variableType", repeat, generator, defaultLength, defaultWindow, defaultSize,
+                      defaultNoise, defaultMethod, motifType))
 
-    parallelRun(createTimeSeries, poolArgs, threads)
+    pool.join()
 
 
 def getAllSizes(length):
