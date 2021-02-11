@@ -2,6 +2,7 @@ import sys
 import os
 import subprocess
 import time
+from pathlib import Path
 
 
 def main():
@@ -35,7 +36,7 @@ def loadTS(tsPath):
 def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
     # create distance graph
 
-    graphPath = "distanceGraph.mtx"
+    graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
     log("creating graph... ", end="", flush=True)
     startTime = time.time()
     try:
@@ -59,7 +60,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
         log("failed (timeout)")
         return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
     finally:
-        os.remove("distanceGraph.mtx")
+        os.remove(graphPath)
     motifIndices = []
     for line in output.splitlines():
         if line.startswith("M "):
