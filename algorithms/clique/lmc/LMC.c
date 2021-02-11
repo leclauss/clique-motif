@@ -286,34 +286,25 @@ static int read_graph_node_node(char *input_file, int format) {
 	else
 		printf("R reading file <n1 n2> ...\n");
 	memset(Node_Degree, 0, MAX_NODE*sizeof(int));
-	if (format <= 2) {
-        while (fgets(line, 127, fp_in) != NULL ) {
-            if ((format == 1 && line[0] == 'e')
-                    || (format == 2 && line[0] != '%')) {
-                if (format == 1)
-                    sscanf(line, "%s%d%d", word, &l_node, &r_node);
-                else
-                    sscanf(line, "%d%d", &l_node, &r_node);
-                if (l_node >= 0 && r_node >= 0 && l_node != r_node) {
-                    nb_edge++;
-                    Node_Degree[l_node]++;
-                    Node_Degree[r_node]++;
-                    if (l_node > max_node)
-                        max_node = l_node;
-                    if (r_node > max_node)
-                        max_node = r_node;
-                    if (l_node == 0 || r_node == 0)
-                        offset = 1;
-                }
-            }
-        }
-	} else {
-	    while (fgets(line, 127, fp_in) != NULL ) {
-            if (line[0] != '%') {
-                sscanf(line, "%d%d%d", &l_node, &max_node, &nb_edge);
-                break;
-            }
-        }
+	while (fgets(line, 127, fp_in) != NULL ) {
+		if ((format == 1 && line[0] == 'e')
+				|| (format == 2 && line[0] != '%')) {
+			if (format == 1)
+				sscanf(line, "%s%d%d", word, &l_node, &r_node);
+			else
+				sscanf(line, "%d%d", &l_node, &r_node);
+			if (l_node >= 0 && r_node >= 0 && l_node != r_node) {
+				nb_edge++;
+				Node_Degree[l_node]++;
+				Node_Degree[r_node]++;
+				if (l_node > max_node)
+					max_node = l_node;
+				if (r_node > max_node)
+					max_node = r_node;
+				if (l_node == 0 || r_node == 0)
+					offset = 1;
+			}
+		}
 	}
 	NB_NODE = max_node;
 	NB_NODE = NB_NODE + offset;
@@ -330,11 +321,10 @@ static int read_graph_node_node(char *input_file, int format) {
 	memset(Node_Degree, 0, (NB_NODE + 1) * sizeof(int));
 
 	nb_edge = 0;
-	if (format <= 2)
-	    fseek(fp_in, 0L, SEEK_SET);
+	fseek(fp_in, 0L, SEEK_SET);
 	while (fgets(line, 127, fp_in) != NULL ) {
 		if ((format == 1 && line[0] == 'e')
-				|| (format >= 2 && line[0] != '%')) {
+				|| (format == 2 && line[0] != '%')) {
 			if (format == 1)
 				sscanf(line, "%s%d%d", word, &l_node, &r_node);
 			else
@@ -375,9 +365,11 @@ static int build_simple_graph_instance(char *input_file) {
 	} else if (strcmp(fileStyle, "edges") == 0) {
 		read_graph_node_node(input_file, 2);
 	} else if (strcmp(fileStyle, "mtx") == 0) {
-		read_graph_node_node(input_file, 3);
-	} else if (FORMAT >= 1 && FORMAT <= 3) {
-		read_graph_node_node(input_file, FORMAT);
+		read_graph_node_node(input_file, 2);
+	} else if (FORMAT == 1) {
+		read_graph_node_node(input_file, 1);
+	} else if (FORMAT == 2) {
+		read_graph_node_node(input_file, 2);
 	} else {
 		read_graph_node_node(input_file, 1);
 	}
@@ -2142,12 +2134,13 @@ static void check_result(char *input_file, char *result_file) {
 	char * fileStyle = strrchr(input_file, '.') + 1;
 	if (strcmp(fileStyle, "clq") == 0) {
 		read_graph_node_node(input_file, 1);
-	} else if (strcmp(fileStyle, "edges") == 0) {
+	} else if (strcmp(fileStyle, "edges") == 0
+			|| strcmp(fileStyle, "mtx") == 0) {
 		read_graph_node_node(input_file, 2);
-	} else if (strcmp(fileStyle, "mtx") == 0) {
-		read_graph_node_node(input_file, 3);
-	} else if (FORMAT >= 1 && FORMAT <= 3) {
-		read_graph_node_node(input_file, FORMAT);
+	} else if (FORMAT == 1) {
+		read_graph_node_node(input_file, 1);
+	} else if (FORMAT == 2) {
+		read_graph_node_node(input_file, 2);
 	} else {
 		read_graph_node_node(input_file, 1);
 	}
