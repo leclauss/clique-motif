@@ -57,12 +57,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
         maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
         # write MTX twice (LMC needs to read twice)
         with open(graphPath, "w") as graphFile:
-            graphFile.write(mtx)
-        for line in maxCliqueProcess.stdout:
-            if line.startswith(b"R the graph size is"):  # wait for first read to finish
-                break
-        with open(graphPath, "w") as graphFile:
-            graphFile.write(mtx)
+            graphFile.write(mtx + "\nR\n" + mtx)
         try:
             # wait for LMC
             stdout, _ = maxCliqueProcess.communicate(
