@@ -63,6 +63,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
             stdout, _ = maxCliqueProcess.communicate(
                 timeout=(timeout - (time.time() - graphStartTime)) if timeout is not None else None)
         except subprocess.TimeoutExpired:
+            maxCliqueProcess.kill()
             log("failed (timeout)")
             return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
     finally:
