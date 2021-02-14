@@ -35,8 +35,6 @@ def loadTS(tsPath):
 
 
 def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
-    graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
-
     # create distance graph
     log("creating graph... ", end="", flush=True)
     graphStartTime = time.time()
@@ -44,7 +42,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
         mtx, nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, timeout=timeout)
     except subprocess.TimeoutExpired:
         log("failed (timeout)")
-        return None, (0, 0, max(0.0, timeout), 0.0)
+        return None, (0, 0, time.time() - graphStartTime, 0.0)
     graphTime = time.time() - graphStartTime
     log("done (" + str(graphTime) + " s)")
     log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", str(len(mtx)), "B)")
@@ -52,6 +50,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
     # find maximum clique
     log("running LMC... ", end="", flush=True)
     cliqueStartTime = time.time()
+    graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
     os.mkfifo(graphPath)  # create named pipe
     try:
         # start LMC
@@ -68,7 +67,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
         except subprocess.TimeoutExpired:
             maxCliqueProcess.kill()
             log("failed (timeout)")
-            return None, (nodeCount, edgeCount, graphTime, max(0.0, timeout - graphTime))
+            return None, (nodeCount, edgeCount, graphTime, time.time() - cliqueStartTime)
     finally:
         os.remove(graphPath)  # remove pipe
     output = stdout.decode("utf-8")
