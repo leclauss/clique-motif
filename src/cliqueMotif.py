@@ -1,3 +1,4 @@
+import itertools
 import sys
 import os
 import subprocess
@@ -57,7 +58,9 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
         maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
         # write MTX twice (LMC needs to read twice)
         with open(graphPath, "w") as graphFile:
-            graphFile.write(mtx + "\nR\n" + mtx)
+            graphFile.write(mtx)
+            graphFile.write("\nR\n")
+            graphFile.write(mtx)
         try:
             # wait for LMC
             stdout, _ = maxCliqueProcess.communicate(
@@ -101,17 +104,18 @@ def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1, timeout=None):
          "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], stdout=subprocess.PIPE,
         timeout=timeout).stdout.decode("utf-8")
 
-    mtx = ""
-    edgeCount = 0
+    edgeList = []
     for line in output.splitlines():
         nums = line.split(" ")
         a = int(nums[0])
         b = int(nums[1])
-        if abs(a - b) >= windowSize:
-            edgeCount += 1
-            mtx += "\n" + str(a + 1) + " " + str(b + 1)
-    mtx = "%%MatrixMarket matrix coordinate pattern symmetric\n%\n" + str(nodes) + " " + str(nodes) \
-          + " " + str(edgeCount) + mtx
+        if b - a >= windowSize:
+            edgeList.append(str(a + 1) + " " + str(b + 1))
+
+    edgeCount = len(edgeList)
+    mtxHeader = ["%%MatrixMarket matrix coordinate pattern symmetric", "%",
+                 str(nodes) + " " + str(nodes) + " " + str(edgeCount)]
+    mtx = "\n".join(itertools.chain(mtxHeader, edgeList))
     return mtx, nodes, edgeCount
 
 
