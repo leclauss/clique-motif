@@ -1,3 +1,4 @@
+import argparse
 import itertools
 import sys
 import os
@@ -7,23 +8,23 @@ from pathlib import Path
 
 
 def main():
-    if len(sys.argv) < 4:
-        print("Usage: python3 cliqueMotif.py windowSize radius path/to/ts.csv [-v] [-b]")
-        return 1
-    windowSize = int(sys.argv[1])
-    radius = float(sys.argv[2])
-    tsPath = sys.argv[3]
-    log = print if "-v" in sys.argv else doNothing
-    # TODO add timeout parameter, catch motifIndices=None below
+    parser = argparse.ArgumentParser(description="A latent motif discovery algorithm.")
+    parser.add_argument("window", type=int, help="motif window")
+    parser.add_argument("radius", type=float, help="motif radius")
+    parser.add_argument("tsPath", type=Path, help="relative path to the time series")
+    parser.add_argument("-v", "--verbose", action='store_true', help="relative path to the time series")
+    parser.add_argument("-b", "--benchmark", action='store_true', help="relative path to the time series")
+    args = parser.parse_args()
+    log = print if args.verbose else doNothing
 
-    motifIndices, stats = getTopMotif(windowSize, radius, tsPath, log)
+    motifIndices, stats = getTopMotif(args.window, args.radius, args.tsPath, log)
     if motifIndices is None:
         return 1
 
     log("top latent range motif size:", len(motifIndices))
     for index in motifIndices:
         print(index)
-    if "-b" in sys.argv:
+    if args.benchmark:
         print("end")
         for stat in stats:
             print(stat)
@@ -104,7 +105,7 @@ def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1):
     # TODO replace subprocess call with pyscamp api (threshold parameter currently does not work):
     # pyscamp.selfjoin_knn(ts, windowSize, threshold=correlation_threshold)
     proc = subprocess.run(
-        ["../algorithms/graph/scamp/build/SCAMP", "--window=" + str(windowSize), "--input_a_file_name=" + tsPath,
+        ["../algorithms/graph/scamp/build/SCAMP", "--window=" + str(windowSize), "--input_a_file_name=" + str(tsPath),
          "--no_gpu", "--num_cpu_workers=" + str(cpu_workers), "--threshold=" + str(correlation_threshold),
          "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], stdout=subprocess.PIPE)
     if proc.returncode != 0:
