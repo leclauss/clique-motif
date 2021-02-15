@@ -8,7 +8,7 @@ from pathlib import Path
 
 def main():
     if len(sys.argv) < 4:
-        print("Usage: python3 cliqueMotif.py windowSize radius path/to/ts.csv [-v]")
+        print("Usage: python3 cliqueMotif.py windowSize radius path/to/ts.csv [-v] [-b]")
         return 1
     windowSize = int(sys.argv[1])
     radius = float(sys.argv[2])
@@ -16,11 +16,17 @@ def main():
     log = print if "-v" in sys.argv else doNothing
     # TODO add timeout parameter, catch motifIndices=None below
 
-    motifIndices = getTopMotif(windowSize, radius, tsPath, log)[0]
+    motifIndices, stats = getTopMotif(windowSize, radius, tsPath, log)
+    if motifIndices is None:
+        return 1
 
     log("top latent range motif size:", len(motifIndices))
     for index in motifIndices:
         print(index)
+    if "-b" in sys.argv:
+        print("end")
+        for stat in stats:
+            print(stat)
     return 0
 
 
@@ -34,24 +40,27 @@ def loadTS(tsPath):
     return ts
 
 
-def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
+def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     # create distance graph
     log("creating graph... ", end="", flush=True)
     graphStartTime = time.time()
-    try:
-        mtx, nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        log("failed (timeout)")
-        return None, (0, 0, time.time() - graphStartTime, 0.0)
+    mtx, nodeCount, edgeCount = createGraphSCAMP(tsPath, windowSize, 2 * radius)
     graphTime = time.time() - graphStartTime
+    if mtx is None:
+        log("failed (SCAMP error)")
+        return None, None
     log("done (" + str(graphTime) + " s)")
-    log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", str(len(mtx)), "B)")
+    mtxSize = len(mtx)
+    log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", str(mtxSize), "B)")
 
     # find maximum clique
     log("running LMC... ", end="", flush=True)
     cliqueStartTime = time.time()
     graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
-    os.mkfifo(graphPath)  # create named pipe
+    try:
+        os.mkfifo(graphPath)  # create named pipe (TODO does not work on Windows)
+    except OSError:
+        log("failed (could not open named pipe)")
     try:
         # start LMC
         maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
@@ -60,14 +69,11 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
             graphFile.write(mtx)
             graphFile.write("\nR\n")
             graphFile.write(mtx)
-        try:
-            # wait for LMC
-            stdout, _ = maxCliqueProcess.communicate(
-                timeout=(timeout - (time.time() - graphStartTime)) if timeout is not None else None)
-        except subprocess.TimeoutExpired:
-            maxCliqueProcess.kill()
-            log("failed (timeout)")
-            return None, (nodeCount, edgeCount, graphTime, time.time() - cliqueStartTime)
+        # wait for LMC
+        stdout, _ = maxCliqueProcess.communicate()
+        if maxCliqueProcess.returncode != 1:
+            log("failed (LMC error)")
+            return None, None
     finally:
         os.remove(graphPath)  # remove pipe
     output = stdout.decode("utf-8")
@@ -86,10 +92,10 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, timeout=None):
     cliqueTime = time.time() - cliqueStartTime
     log("done (" + str(cliqueTime) + " s)")
 
-    return motifIndices, (nodeCount, edgeCount, graphTime, cliqueTime)
+    return motifIndices, (nodeCount, edgeCount, mtxSize, graphTime, cliqueTime)
 
 
-def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1, timeout=None):
+def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1):
     # TODO multiple threads don't work (scamp output is not correct)
     ts = loadTS(tsPath)
     length = len(ts)
@@ -97,14 +103,15 @@ def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1, timeout=None):
     correlation_threshold = (1 - radius ** 2 / 2 / windowSize)
     # TODO replace subprocess call with pyscamp api (threshold parameter currently does not work):
     # pyscamp.selfjoin_knn(ts, windowSize, threshold=correlation_threshold)
-    output = subprocess.run(
+    proc = subprocess.run(
         ["../algorithms/graph/scamp/build/SCAMP", "--window=" + str(windowSize), "--input_a_file_name=" + tsPath,
          "--no_gpu", "--num_cpu_workers=" + str(cpu_workers), "--threshold=" + str(correlation_threshold),
-         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], stdout=subprocess.PIPE,
-        timeout=timeout).stdout.decode("utf-8")
+         "--output_a_file_name=/dev/null", "--output_a_index_file_name=/dev/null"], stdout=subprocess.PIPE)
+    if proc.returncode != 0:
+        return None, 0, 0
 
     edgeList = []
-    for line in output.splitlines():
+    for line in proc.stdout.decode("utf-8").splitlines():
         nums = line.split(" ")
         a = int(nums[0])
         b = int(nums[1])
