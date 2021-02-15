@@ -154,7 +154,7 @@ def run(args, timeout=None, maxMemory=None):
             preFunc = setLimits
 
     if timeout is not None:
-        args = ["timeout", str(timeout)] + args
+        args = ["timeout", "--kill-after=15", str(timeout)] + args
 
     proc = subprocess.run(args, preexec_fn=preFunc, stdout=subprocess.PIPE)
     return proc.returncode, proc.stdout.decode("utf-8")
