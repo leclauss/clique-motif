@@ -49,7 +49,7 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     graphTime = time.time() - graphStartTime
     if mtx is None:
         log("failed (SCAMP error)")
-        return None, None
+        return None, (nodeCount, edgeCount, 0, graphTime, 0.0)
     log("done (" + str(graphTime) + " s)")
     mtxSize = len(mtx)
     log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", str(mtxSize), "B)")
@@ -57,40 +57,11 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing):
     # find maximum clique
     log("running LMC... ", end="", flush=True)
     cliqueStartTime = time.time()
-    graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
-    try:
-        os.mkfifo(graphPath)  # create named pipe (TODO does not work on Windows)
-    except OSError:
-        log("failed (could not open named pipe)")
-    try:
-        # start LMC
-        maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
-        # write MTX twice (LMC needs to read twice)
-        with open(graphPath, "w") as graphFile:
-            graphFile.write(mtx)
-            graphFile.write("\nR\n")
-            graphFile.write(mtx)
-        # wait for LMC
-        stdout, _ = maxCliqueProcess.communicate()
-        if maxCliqueProcess.returncode != 1:
-            log("failed (LMC error)")
-            return None, None
-    finally:
-        os.remove(graphPath)  # remove pipe
-    output = stdout.decode("utf-8")
-    motifIndices = []
-    for line in output.splitlines():
-        if line.startswith("M "):
-            indices = line.split(" ")
-            for index in indices:
-                try:
-                    motifIndex = int(index) - 1
-                    motifIndices.append(motifIndex)
-                except ValueError:
-                    pass
-            break
-
+    motifIndices = findCliqueLMC(mtx, tsPath)
     cliqueTime = time.time() - cliqueStartTime
+    if motifIndices is None:
+        log("failed (LMC error)")
+        return None, (nodeCount, edgeCount, mtxSize, graphTime, cliqueTime)
     log("done (" + str(cliqueTime) + " s)")
 
     return motifIndices, (nodeCount, edgeCount, mtxSize, graphTime, cliqueTime)
@@ -124,6 +95,38 @@ def createGraphSCAMP(tsPath, windowSize, radius, cpu_workers=1):
                  str(nodes) + " " + str(nodes) + " " + str(edgeCount)]
     mtx = "\n".join(itertools.chain(mtxHeader, edgeList))
     return mtx, nodes, edgeCount
+
+
+def findCliqueLMC(mtx, tsPath):
+    graphPath = Path(tsPath).parent.absolute() / ("distanceGraph-" + str(hash(tsPath))[:8] + ".mtx")
+    os.mkfifo(graphPath)  # create named pipe (TODO does not work on Windows)
+    try:
+        # start LMC
+        maxCliqueProcess = subprocess.Popen(["../algorithms/clique/lmc/LMC", graphPath], stdout=subprocess.PIPE)
+        # write MTX twice (LMC needs to read twice)
+        with open(graphPath, "w") as graphFile:
+            graphFile.write(mtx)
+            graphFile.write("\nR\n")
+            graphFile.write(mtx)
+        # wait for LMC
+        stdout, _ = maxCliqueProcess.communicate()
+        if maxCliqueProcess.returncode != 1:
+            return None
+    finally:
+        os.remove(graphPath)  # remove pipe
+    output = stdout.decode("utf-8")
+    motifIndices = []
+    for line in output.splitlines():
+        if line.startswith("M "):
+            indices = line.split(" ")
+            for index in indices:
+                try:
+                    motifIndex = int(index) - 1
+                    motifIndices.append(motifIndex)
+                except ValueError:
+                    pass
+            break
+    return motifIndices
 
 
 if __name__ == "__main__":
