@@ -1,12 +1,12 @@
 import os
 import re
+import resource
 import subprocess
 import sys
 import time
 import argparse
 from pathlib import Path
 
-from cliqueMotif import getTopMotif
 from util import ParallelRun
 
 path = Path(__file__).parent.absolute()
@@ -14,80 +14,44 @@ path = Path(__file__).parent.absolute()
 # algorithm settings
 algDir = path / "../tsgenerator/benchmark/algorithms"
 algorithms = {
-    "CliqueMotif": lambda tsPath, _, window, radius, timeout: cliqueMotif(tsPath, window, radius, timeout),
-    "EMMA": lambda tsPath, _, window, radius, timeout: emma(tsPath, window, radius, timeout),
-    "GrammarViz3.0": lambda tsPath, _, window, __, timeout: grammarViz(tsPath, window, timeout),
-    "ScanMK": lambda tsPath, _, window, radius, timeout: scanMk(tsPath, window, radius, timeout),
-    "SetFinder": lambda tsPath, _, window, radius, timeout: setFinder(tsPath, window, radius, timeout),
-    "ClusterMK": lambda tsPath, _, window, radius, timeout: clusterMk(tsPath, window, radius, timeout),
-    "LearnMotifs": lambda tsPath, length, window, radius, timeout: learnMotifs(tsPath, length, window, radius, timeout)
+    "CliqueMotif": lambda tsPath, _, window, radius: cliqueMotif(tsPath, window, radius),
+    "EMMA": lambda tsPath, _, window, radius: emma(tsPath, window, radius),
+    "GrammarViz3.0": lambda tsPath, _, window, __: grammarViz(tsPath, window),
+    "ScanMK": lambda tsPath, _, window, radius: scanMk(tsPath, window, radius),
+    "SetFinder": lambda tsPath, _, window, radius: setFinder(tsPath, window, radius),
+    "ClusterMK": lambda tsPath, _, window, radius: clusterMk(tsPath, window, radius),
+    "LearnMotifs": lambda tsPath, length, window, radius: learnMotifs(tsPath, length, window, radius)
 }
 
 
-def cliqueMotif(tsPath, window, radius, timeout):
-    motif, stats = getTopMotif(window, radius, str(tsPath), timeout=timeout)
-    return [motif] if motif is not None else None, stats
+def cliqueMotif(tsPath, window, radius):
+    return ["python3", "cliqueMotif.py", "-b", str(window), str(radius), str(tsPath)]
 
 
-def emma(tsPath, window, radius, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "EMMA.jar", tsPath,
-                            str(window), str(2 * radius), "6", "4", "1.0"], timeout=timeout)), None
+def emma(tsPath, window, radius):
+    return ["java", "-jar", algDir / "EMMA.jar", str(tsPath), str(window), str(2 * radius), "6", "4", "1.0"]
 
 
-def grammarViz(tsPath, window, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "GrammarViz3.jar", "-d", tsPath,
-                            "-w", str(window), "-p", "6", "-a", "4"], timeout=timeout)), None
+def grammarViz(tsPath, window):
+    return ["java", "-jar", algDir / "GrammarViz3.jar", "-d", str(tsPath), "-w", str(window), "-p", "6", "-a", "4"]
 
 
-def scanMk(tsPath, window, radius, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "ScanMK.jar", "d=" + str(tsPath),
-                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
+def scanMk(tsPath, window, radius):
+    return ["java", "-jar", algDir / "ScanMK.jar", "d=" + str(tsPath), "w=" + str(window), "k=1", "r=" + str(radius)]
 
 
-def setFinder(tsPath, window, radius, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "SetFinder.jar", "d=" + str(tsPath),
-                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
+def setFinder(tsPath, window, radius):
+    return ["java", "-jar", algDir / "SetFinder.jar", "d=" + str(tsPath), "w=" + str(window), "k=1", "r=" + str(radius)]
 
 
-def clusterMk(tsPath, window, radius, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "ClusterMK.jar", "d=" + str(tsPath),
-                            "w=" + str(window), "k=1", "r=" + str(radius)], timeout=timeout)), None
+def clusterMk(tsPath, window, radius):
+    return ["java", "-jar", algDir / "ClusterMK.jar", "d=" + str(tsPath), "w=" + str(window), "k=1", "r=" + str(radius)]
 
 
-def learnMotifs(tsPath, length, window, radius, timeout):
-    return parseOutput(run(["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath),
-                            "eta=0.1", "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=3", "pct=1",
-                            "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius ** 2)],
-                           timeout=timeout)), None
-
-
-def run(args, timeout=None):
-    try:
-        output = subprocess.run(args, stdout=subprocess.PIPE, timeout=timeout).stdout.decode("utf-8")
-    except subprocess.TimeoutExpired:
-        return None
-    return output
-
-
-def parseOutput(output):
-    if output is None:
-        return None
-    motifs = []
-    currentMotif = []
-    for line in output.splitlines():
-        isNext = line.startswith("next")
-        isEnd = line.startswith("end")
-        if isNext or isEnd:
-            if len(currentMotif) > 0:
-                motifs.append(currentMotif)
-                currentMotif = []
-            if isEnd:
-                return motifs
-        else:
-            currentMotif.append(int(line))
-    if len(currentMotif) > 0:
-        motifs.append(currentMotif)
-    return motifs
+def learnMotifs(tsPath, length, window, radius):
+    return ["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath), "eta=0.1",
+            "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=3", "pct=1",
+            "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius ** 2)]
 
 
 def main():
@@ -102,12 +66,13 @@ def main():
     parser.add_argument("--threads", type=int, default=1, help="number of threads (default: 1)")
     parser.add_argument("--timeout", type=float, default=None, help="maximum time for a single time series in seconds"
                                                                     " (default: None)")
+    parser.add_argument("--memory", type=int, default=None, help="maximum memory per thread (default: None)")
     args = parser.parse_args()
     return runBenchmark(args.benchmarkPath.absolute(), args.outputFile.absolute(), args.sep, args.algs.split(","),
-                        args.radius, args.threads, args.timeout)
+                        args.radius, args.threads, args.timeout, args.memory)
 
 
-def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMultiplier, threads, timeout):
+def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMultiplier, threads, timeout, maxMemory):
     if outFilePath.exists():
         print("Error: output file", outFilePath, "already exists")
         return 1
@@ -136,7 +101,7 @@ def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMu
         inputRange = motifRange * radiusMultiplier
 
         for name in algorithmNames:
-            pool.run((name, tsPath, tsMetaPath, length, window, inputRange, timeout))
+            pool.run((name, tsPath, tsMetaPath, length, window, inputRange, timeout, maxMemory))
 
     pool.join()
     return 0
@@ -164,16 +129,60 @@ def getMetaInformation(tsMetaPath):
     return info
 
 
-def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRange, timeout):
+def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRange, timeout, maxMemory):
     algorithm = algorithms[name]
 
     # run algorithm
     startTime = time.time()
-    motifsFound, stats = algorithm(tsPath, length, window, inputRange, timeout)
+    output = run(algorithm(tsPath, length, window, inputRange), timeout=timeout, maxMemory=maxMemory)
     runtime = time.time() - startTime
+    motifsFound, stats = parseOutput(output)
 
     # return results
     return [str(tsPath), str(tsMetaPath), str(inputRange), name, str(runtime), str(motifsFound), str(stats)]
+
+
+def run(args, timeout=None, maxMemory=None):
+    def setLimits():
+        resource.setrlimit(resource.RLIMIT_AS, (maxMemory, maxMemory))
+
+    preFunc = None
+    if maxMemory is not None:
+        if args[0] == "java":
+            args.insert(1, "-Xmx" + str(maxMemory))
+        else:
+            preFunc = setLimits
+    try:
+        proc = subprocess.run(args, preexec_fn=preFunc, stdout=subprocess.PIPE, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
+    return proc.stdout.decode("utf-8") if proc.returncode == 0 else None
+
+
+def parseOutput(output):
+    if output is None:
+        return None, None
+    motifs = []
+    currentMotif = []
+    infoLines = []
+    endFound = False
+    for line in output.splitlines():
+        if endFound:
+            infoLines.append(line.strip())
+        else:
+            isNext = line.startswith("next")
+            isEnd = line.startswith("end")
+            if isNext or isEnd:
+                if len(currentMotif) > 0:
+                    motifs.append(currentMotif)
+                    currentMotif = []
+                if isEnd:
+                    endFound = True
+            else:
+                currentMotif.append(int(line))
+    if len(currentMotif) > 0:
+        motifs.append(currentMotif)
+    return motifs, infoLines
 
 
 if __name__ == '__main__':
