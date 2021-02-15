@@ -134,9 +134,9 @@ def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRange, timeout
 
     # run algorithm
     startTime = time.time()
-    output = run(algorithm(tsPath, length, window, inputRange), timeout=timeout, maxMemory=maxMemory)
+    returnCode, output = run(algorithm(tsPath, length, window, inputRange), timeout=timeout, maxMemory=maxMemory)
     runtime = time.time() - startTime
-    motifsFound, stats = parseOutput(output)
+    motifsFound, stats = parseOutput(output, infoOnly=(returnCode != 0))
 
     # return results
     return [str(tsPath), str(tsMetaPath), str(inputRange), name, str(runtime), str(motifsFound), str(stats)]
@@ -152,20 +152,19 @@ def run(args, timeout=None, maxMemory=None):
             args.insert(1, "-Xmx" + str(maxMemory))
         else:
             preFunc = setLimits
-    try:
-        proc = subprocess.run(args, preexec_fn=preFunc, stdout=subprocess.PIPE, timeout=timeout)
-    except subprocess.TimeoutExpired:
-        return None
-    return proc.stdout.decode("utf-8") if proc.returncode == 0 else None
+
+    if timeout is not None:
+        args = ["timeout", str(timeout)] + args
+
+    proc = subprocess.run(args, preexec_fn=preFunc, stdout=subprocess.PIPE)
+    return proc.returncode, proc.stdout.decode("utf-8")
 
 
-def parseOutput(output):
-    if output is None:
-        return None, None
+def parseOutput(output, infoOnly=False):
     motifs = []
     currentMotif = []
     infoLines = []
-    endFound = False
+    endFound = infoOnly
     for line in output.splitlines():
         if endFound:
             infoLines.append(line.strip())
@@ -182,7 +181,7 @@ def parseOutput(output):
                 currentMotif.append(int(line))
     if len(currentMotif) > 0:
         motifs.append(currentMotif)
-    return motifs, infoLines
+    return (None if infoOnly else motifs), infoLines
 
 
 if __name__ == '__main__':
