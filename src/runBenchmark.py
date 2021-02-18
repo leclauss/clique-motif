@@ -5,6 +5,7 @@ import subprocess
 import sys
 import time
 import argparse
+import math
 from pathlib import Path
 
 from util import ParallelRun
@@ -62,27 +63,30 @@ def main():
     parser.add_argument("--algs", default=",".join(algorithms.keys()),
                         help="names of the algorithms to be tested, separated by ',' (default: "
                              "all available algorithms: " + ", ".join(algorithms.keys()) + ")")
-    parser.add_argument("--radius", type=float, default=1.0, help="input radius multiplier (default: 1.0)")
+    parser.add_argument("--corrs", default=None, help="correlation thresholds, the input radii are calculated as sqrt("
+                                                      "2*window*(1-correlation))  (default: None, use actual radius)")
     parser.add_argument("--threads", type=int, default=1, help="number of threads (default: 1)")
     parser.add_argument("--timeout", type=float, default=None, help="maximum time for a single time series in seconds"
                                                                     " (default: None)")
     parser.add_argument("--memory", type=int, default=None, help="maximum memory per thread (default: None)")
     args = parser.parse_args()
+    inputCorrelations = None if args.corrs is None else [float(c) for c in args.corrs.split(",")]
     return runBenchmark(args.benchmarkPath.absolute(), args.outputFile.absolute(), args.sep, args.algs.split(","),
-                        args.radius, args.threads, args.timeout, args.memory)
+                        inputCorrelations, args.threads, args.timeout, args.memory)
 
 
-def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMultiplier, threads, timeout, maxMemory):
+def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, inputCorrelations, threads, timeout, maxMemory):
     if outFilePath.exists():
         print("Error: output file", outFilePath, "already exists")
         return 1
 
     def output(*results):
         with open(outFilePath, "a") as outFile:
-            outFile.write(separator.join(results) + "\n")
+            for result in results:
+                outFile.write(separator.join(result) + "\n")
 
     # write header
-    output(*["TS Path", "Meta Path", "Input Range", "Algorithm", "Runtime", "Found Motifs", "Stats"])
+    output(["TS Path", "Meta Path", "Input Range", "Algorithm", "Runtime", "Found Motifs", "Stats"])
 
     # run benchmark parallelized
     pool = ParallelRun(__runAlgorithm, threads, log=print, outputFunction=output)
@@ -98,10 +102,11 @@ def runBenchmark(benchmarkPath, outFilePath, separator, algorithmNames, radiusMu
         length = int(info["length"])
         window = int(info["window"])
         motifRange = float(info["range"])
-        inputRange = motifRange * radiusMultiplier
+        inputRanges = [motifRange] if inputCorrelations is None else [math.sqrt(2 * window * (1 - c)) for c in
+                                                                      inputCorrelations]
 
         for name in algorithmNames:
-            pool.run((name, tsPath, tsMetaPath, length, window, inputRange, timeout, maxMemory))
+            pool.run((name, tsPath, tsMetaPath, length, window, inputRanges, timeout, maxMemory))
 
     pool.join()
     return 0
@@ -129,17 +134,21 @@ def getMetaInformation(tsMetaPath):
     return info
 
 
-def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRange, timeout, maxMemory):
+def __runAlgorithm(name, tsPath, tsMetaPath, length, window, inputRanges, timeout, maxMemory):
     algorithm = algorithms[name]
 
-    # run algorithm
-    startTime = time.time()
-    returnCode, output = run(algorithm(tsPath, length, window, inputRange), timeout=timeout, maxMemory=maxMemory)
-    runtime = time.time() - startTime
-    motifsFound, stats = parseOutput(output, infoOnly=(returnCode != 0))
+    results = []
+    for inputRange in inputRanges:
+        # run algorithm
+        startTime = time.time()
+        returnCode, output = run(algorithm(tsPath, length, window, inputRange), timeout=timeout, maxMemory=maxMemory)
+        runtime = time.time() - startTime
+        motifsFound, stats = parseOutput(output, infoOnly=(returnCode != 0))
+        results.append([str(tsPath), str(tsMetaPath), str(inputRange), name,
+                        str(runtime), str(motifsFound), str(stats)])
 
     # return results
-    return [str(tsPath), str(tsMetaPath), str(inputRange), name, str(runtime), str(motifsFound), str(stats)]
+    return results
 
 
 def run(args, timeout=None, maxMemory=None):
