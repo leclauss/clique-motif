@@ -48,8 +48,7 @@ def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
             tsPath, tsMetaPath, radius = tsRun
             info = getMetaInformation(tsMetaPath)
             window = int(info["window"])
-            line = [info["length"], info["method"], info["type"], info["noise"], info["size"], info["window"],
-                    info["range"]]
+            line = [info["length"], info["method"], info["type"], info["noise"], info["size"], info["window"], radius]
             results = tsRuns[tsRun]
             if groundTruth is None:
                 motif = [int(index) for index in info["matchings"].split(",")]
