@@ -61,31 +61,31 @@ def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
                         motif = motifsFound[0]
             if motif is None:
                 print("No ground truth motif found for", tsRun)
-            else:
-                for algorithm in algorithms:
-                    if algorithm not in results.keys():
-                        print("No", algorithm, "result for", tsRun)
-                        line += [""] * 6
-                        if algorithm == "CliqueMotif":
-                            line += [""] * 5
+
+            for algorithm in algorithms:
+                if algorithm not in results.keys():
+                    print("No", algorithm, "result for", tsRun)
+                    line += [""] * 6
+                    if algorithm == "CliqueMotif":
+                        line += [""] * 5
+                else:
+                    result = results[algorithm]
+                    runtime = result[0]
+                    motifsFound = ast.literal_eval(result[1])
+                    stats = ast.literal_eval(result[2])
+                    if motifsFound is None:
+                        error = 1 if float(runtime) > timeout else 2
+                        f1Score, precision, recall, lengthFound = 0.0, 0.0, 0.0, 0
                     else:
-                        result = results[algorithm]
-                        runtime = result[0]
-                        motifsFound = ast.literal_eval(result[1])
-                        stats = ast.literal_eval(result[2])
-                        if motifsFound is None:
-                            error = 1 if float(runtime) > timeout else 2
-                            f1Score = 0.0
-                            precision = 0.0
-                            recall = 0.0
-                            lengthFound = 0
+                        error = 0
+                        if motif is None:
+                            f1Score, precision, recall, lengthFound = "", "", "", ""
                         else:
-                            error = 0
                             f1Score, precision, recall, lengthFound, _ = getPointBasedScores(motif, motifsFound, window)
-                        line += [runtime, str(error), str(precision), str(recall), str(f1Score), str(lengthFound)]
-                        if algorithm == "CliqueMotif":
-                            line += stats
-                outputFile.write(separator.join(line) + "\n")
+                    line += [runtime, str(error), str(precision), str(recall), str(f1Score), str(lengthFound)]
+                    if algorithm == "CliqueMotif":
+                        line += stats
+            outputFile.write(separator.join(line) + "\n")
 
 
 def appendResult(resultDict, tsRun, algorithm, result):
