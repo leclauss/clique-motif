@@ -20,16 +20,17 @@ def main():
 
 
 def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
+    headerStart = "TS Path"
     with open(inputPath, "r") as runFile:
         tsRuns = {}
         algorithms = []
-        runFile.readline()  # read header
         for line in runFile:
-            data = line.strip().split(";")
-            algorithm = data[3]
-            appendResult(tsRuns, tuple(data[0:3]), algorithm, data[4:])
-            if algorithm not in algorithms:
-                algorithms.append(algorithm)
+            if not line.startswith(headerStart):
+                data = line.strip().split(";")
+                algorithm = data[3]
+                appendResult(tsRuns, tuple(data[0:3]), algorithm, data[4:])
+                if algorithm not in algorithms:
+                    algorithms.append(algorithm)
 
     with open(outputPath, "w") as outputFile:
         outputFile.write(separator.join(["Length", "Method", "Type", "Noise", "Size", "Window", "Range", ""]))
