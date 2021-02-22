@@ -3,7 +3,7 @@ import sys
 import ast
 from pathlib import Path
 
-from src.runBenchmark import getMetaInformation
+from runBenchmark import getMetaInformation
 
 
 def main():
