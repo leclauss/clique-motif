@@ -33,7 +33,7 @@ def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
                     algorithms.append(algorithm)
 
     with open(outputPath, "w") as outputFile:
-        outputFile.write(separator.join(["Length", "Method", "Type", "Noise", "Size", "Window", "Range", ""]))
+        allColumns = ["Length", "Method", "Type", "Noise", "Size", "Window", "Range"]
         for algorithm in algorithms:
             columns = ["Runtime", "Error", "Precision", "Recall", "F1", "Found_Size"]
             if algorithm == "CliqueMotif":
@@ -41,8 +41,8 @@ def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
             algCols = []
             for column in columns:
                 algCols.append(algorithm + "_" + column)
-            outputFile.write(separator.join(algCols))
-        outputFile.write("\n")
+            allColumns += algCols
+        outputFile.write(separator.join(allColumns) + "\n")
 
         for tsRun in tsRuns.keys():
             tsPath, tsMetaPath, radius = tsRun
@@ -83,7 +83,10 @@ def generateStatsFile(inputPath, outputPath, groundTruth, separator, timeout):
                             f1Score, precision, recall, lengthFound, _ = getPointBasedScores(motif, motifsFound, window)
                     line += [runtime, str(error), str(precision), str(recall), str(f1Score), str(lengthFound)]
                     if algorithm == "CliqueMotif":
-                        line += stats
+                        if len(stats) == 5:
+                            line += stats
+                        else:
+                            line += [""] * 5
             outputFile.write(separator.join(line) + "\n")
 
 
