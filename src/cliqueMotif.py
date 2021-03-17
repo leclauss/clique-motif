@@ -59,6 +59,9 @@ def getTopMotif(windowSize, radius, tsPath, log=doNothing, handleSignals=False):
     mtxSize = len(mtx)
     log("nodes:", nodeCount, ", edges:", edgeCount, "(file size:", str(mtxSize), "B)")
 
+    if edgeCount == 0:
+        return [], (nodeCount, edgeCount, mtxSize, graphTime, 0.0)
+
     # find maximum clique
     log("running LMC... ", end="", flush=True)
     cliqueStartTime = time.time()
