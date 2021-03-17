@@ -50,8 +50,8 @@ def clusterMk(tsPath, window, radius):
 
 
 def learnMotifs(tsPath, length, window, radius):
-    return ["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath), "eta=0.1",
-            "maxIter=1000", "numRandomRestarts=200", "alpha=2", "K=3",
+    return ["java", "-jar", algDir / "LearnMotifs.jar", "dataSet=" + str(tsPath), "eta=0.3",
+            "maxIter=300", "numRandomRestarts=50", "alpha=2", "K=3",
             "tsLength=" + str(length), "w=" + str(window), "t=" + str(radius ** 2)]
 
 
