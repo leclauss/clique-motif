@@ -117,7 +117,7 @@ def getPointBasedScores(motif, motifsFound, window):
         # calculate f1 score
         f1Score = (2 * precision * recall / (precision + recall) if precision + recall > 0 else 0.0)
         # save best f1 score
-        if f1Score > bestStats[0]:
+        if f1Score >= bestStats[0]:
             bestStats = (f1Score, precision, recall, len(motifFound), index)
     return bestStats
 
