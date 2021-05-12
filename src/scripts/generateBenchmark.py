@@ -21,13 +21,13 @@ defaultNoise = 2.0
 defaultMethod = "boundedNormalRandomWalk"
 defaultType = "box"
 
-lengths = [2000]#, 4000, 8000, 16000, 32000, 64000]  # [4000, 5000, 6000, 7000]
+lengths = [2000, 4000, 8000, 16000, 32000, 64000]  # [4000, 5000, 6000, 7000]
 sizes = []  # [3, 5, 7, 9]
 sizesPercent = [0.0015, 0.0020, 0.0025, 0.0030]  # size proportional to length
-windows = [20]#, 30, 40, 50]  # [30, 35, 40, 45]
-noises = [2.0]#, 2.25, 2.5, 2.75]
+windows = [20, 30, 40, 50]  # [30, 35, 40, 45]
+noises = [2.0, 2.25, 2.5, 2.75]
 methods = ["boundedNormalRandomWalk", "linearRandomWalk", "piecewiseLinearRandom", "splineRepeated"]
-motifTypes = ["box"]#, "semicircle", "positiveflank", "sine"]
+motifTypes = ["box", "semicircle", "positiveflank", "sine"]
 
 defaultDelta = 1.0
 defaultStep = 1.0
