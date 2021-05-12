@@ -13,7 +13,7 @@ from util import ParallelRun
 path = Path(__file__).parent.absolute()
 
 # algorithm settings
-algDir = path / "../tsgenerator/benchmark/algorithms"
+algDir = path / "../../tsgenerator/benchmark/algorithms"
 algorithms = {
     "CliqueMotif": lambda tsPath, _, window, radius: cliqueMotif(tsPath, window, radius),
     "EMMA": lambda tsPath, _, window, radius: emma(tsPath, window, radius),
